@@ -5,12 +5,13 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends gcc libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Copy source first — pip install needs the app package present
 COPY api/pyproject.toml .
+COPY api/app/ app/
 RUN pip install --no-cache-dir .
 
 COPY api/alembic.ini .
 COPY api/alembic/ alembic/
-COPY api/app/ app/
 
 EXPOSE 8000
 
