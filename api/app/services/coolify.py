@@ -26,7 +26,7 @@ class CoolifyService:
 
     async def create_app(self, name: str, repo_url: str, env_vars: dict[str, str]) -> dict:
         resp = await self._client.post(
-            "/api/v1/applications",
+            "/api/v1/applications/public",
             json={
                 "name": name,
                 "server_uuid": self.server_uuid,
@@ -35,6 +35,7 @@ class CoolifyService:
                 "git_repository": repo_url,
                 "git_branch": "main",
                 "build_pack": "dockerfile",
+                "ports_exposes": "8000",
                 "instant_deploy": False,
             },
         )

@@ -15,7 +15,12 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 
 
 async def _ensure_user(session: AsyncSession, auth_user: AuthUser) -> User:
-    result = await session.execute(select(User).where(User.github_id == auth_user.github_id))
+    from sqlalchemy import or_
+    result = await session.execute(
+        select(User).where(
+            or_(User.github_id == auth_user.github_id, User.github_login == auth_user.github_login)
+        )
+    )
     user = result.scalar_one_or_none()
     if user is None:
         user = User(
@@ -24,6 +29,9 @@ async def _ensure_user(session: AsyncSession, auth_user: AuthUser) -> User:
             github_id=auth_user.github_id,
         )
         session.add(user)
+        await session.flush()
+    elif user.github_id != auth_user.github_id:
+        user.github_id = auth_user.github_id
         await session.flush()
     return user
 
