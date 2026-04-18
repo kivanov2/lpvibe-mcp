@@ -1,0 +1,24 @@
+[project]
+name = "lpvibe-mcp-server"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp[cli]>=1.2",
+    "httpx>=0.28",
+    "PyJWT[crypto]>=2.10",
+    "pydantic-settings>=2.7",
+    "uvicorn[standard]>=0.34",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
