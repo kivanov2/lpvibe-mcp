@@ -162,6 +162,89 @@ async def get_project(
     return project
 
 
+@router.get("/{project_id}/logs")
+async def get_project_logs(
+    project_id: uuid.UUID,
+    lines: int = 100,
+    auth_user: AuthUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    result = await session.execute(
+        select(Project).where(Project.id == project_id, Project.user_id == auth_user.user_id)
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if not project.coolify_app_uuid:
+        raise HTTPException(status_code=409, detail="Project has no Coolify app")
+
+    from app.main import coolify_svc
+    if not coolify_svc:
+        raise HTTPException(status_code=503, detail="Coolify service unavailable")
+
+    logs = await coolify_svc.get_app_logs(project.coolify_app_uuid, lines=lines)
+    return {"project_id": str(project_id), "logs": logs}
+
+
+@router.get("/{project_id}/status")
+async def get_project_status(
+    project_id: uuid.UUID,
+    auth_user: AuthUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    result = await session.execute(
+        select(Project).where(Project.id == project_id, Project.user_id == auth_user.user_id)
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if not project.coolify_app_uuid:
+        raise HTTPException(status_code=409, detail="Project has no Coolify app")
+
+    from app.main import coolify_svc
+    if not coolify_svc:
+        raise HTTPException(status_code=503, detail="Coolify service unavailable")
+
+    data = await coolify_svc.get_deploy_status(project.coolify_app_uuid)
+    return {
+        "project_id": str(project_id),
+        "status": data.get("status"),
+        "preview_url": project.preview_url,
+        "coolify_app_uuid": project.coolify_app_uuid,
+    }
+
+
+@router.post("/{project_id}/exec")
+async def exec_command(
+    project_id: uuid.UUID,
+    body: dict,
+    auth_user: AuthUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    command = body.get("command", "").strip()
+    if not command:
+        raise HTTPException(status_code=422, detail="command is required")
+
+    result = await session.execute(
+        select(Project).where(Project.id == project_id, Project.user_id == auth_user.user_id)
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if not project.coolify_app_uuid:
+        raise HTTPException(status_code=409, detail="Project has no Coolify app")
+
+    from app.main import coolify_svc
+    if not coolify_svc:
+        raise HTTPException(status_code=503, detail="Coolify service unavailable")
+
+    output = await coolify_svc.exec_command(project.coolify_app_uuid, command)
+    await log_action(session, user_id=auth_user.user_id, action="exec_command",
+                     project_id=project.id, args={"command": command}, result="success")
+    await session.commit()
+    return {"project_id": str(project_id), "command": command, "output": output}
+
+
 @router.delete("/{project_id}", status_code=204)
 async def delete_project(
     project_id: uuid.UUID,

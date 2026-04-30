@@ -58,5 +58,25 @@ class PlatformClient:
         r = await self._client.delete(f"/projects/{project_id}", headers=self._headers())
         r.raise_for_status()
 
+    async def get_project_logs(self, project_id: str, lines: int = 100) -> dict:
+        r = await self._client.get(f"/projects/{project_id}/logs", params={"lines": lines}, headers=self._headers())
+        r.raise_for_status()
+        return r.json()
+
+    async def get_project_status(self, project_id: str) -> dict:
+        r = await self._client.get(f"/projects/{project_id}/status", headers=self._headers())
+        r.raise_for_status()
+        return r.json()
+
+    async def exec_command(self, project_id: str, command: str) -> dict:
+        r = await self._client.post(
+            f"/projects/{project_id}/exec",
+            json={"command": command},
+            headers=self._headers(),
+            timeout=120.0,
+        )
+        r.raise_for_status()
+        return r.json()
+
     async def close(self) -> None:
         await self._client.aclose()

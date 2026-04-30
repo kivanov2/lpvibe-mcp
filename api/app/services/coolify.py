@@ -69,6 +69,20 @@ class CoolifyService:
             result = await result
         return result
 
+    async def get_app_logs(self, app_uuid: str, lines: int = 100) -> str:
+        resp = await self._client.get(f"/api/v1/applications/{app_uuid}/logs", params={"lines": lines})
+        resp.raise_for_status()
+        return resp.text
+
+    async def exec_command(self, app_uuid: str, command: str) -> dict:
+        resp = await self._client.post(
+            f"/api/v1/applications/{app_uuid}/execute",
+            json={"command": command},
+            timeout=120.0,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
     async def delete_app(self, app_uuid: str) -> None:
         resp = await self._client.delete(
             f"/api/v1/applications/{app_uuid}",

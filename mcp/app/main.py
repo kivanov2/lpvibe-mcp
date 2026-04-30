@@ -62,6 +62,38 @@ async def delete_project(project_id: str) -> dict:
 
 
 @mcp.tool()
+async def get_logs(project_id: str, lines: int = 100) -> dict:
+    """Fetch the last N log lines from the running Coolify app for a project.
+
+    project_id: UUID of the project.
+    lines: how many tail lines to return (default 100, max ~500).
+    """
+    return await _client.get_project_logs(project_id, lines=lines)
+
+
+@mcp.tool()
+async def get_deploy_status(project_id: str) -> dict:
+    """Get current deployment/runtime status of a project's Coolify app.
+
+    Returns status string (e.g. 'running:healthy', 'running:unknown', 'stopped'),
+    preview_url, and coolify_app_uuid.
+    """
+    return await _client.get_project_status(project_id)
+
+
+@mcp.tool()
+async def run_command(project_id: str, command: str) -> dict:
+    """Execute a shell command inside the running project container.
+
+    Useful for: database migrations, seed scripts, inspecting the environment.
+    project_id: UUID of the project.
+    command: shell command string, e.g. 'alembic upgrade head' or 'python manage.py migrate'.
+    Returns {"output": ...} with stdout/stderr from the container.
+    """
+    return await _client.exec_command(project_id, command)
+
+
+@mcp.tool()
 async def browser_screenshot(url: str, full_page: bool = False) -> Image:
     """Take a screenshot of any URL. Returns PNG image for visual inspection and analysis.
 
