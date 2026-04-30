@@ -15,5 +15,8 @@ class Settings(BaseSettings):
     mcp_host: str = "0.0.0.0"
     mcp_port: int = 8001
 
+    browserless_url: str = "https://browserless.main.loyaltyapp-tools.com"
+    browserless_token: str = ""
+
 
 settings = Settings()
