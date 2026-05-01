@@ -20,6 +20,34 @@ All 11 MCP tools are prefixed with `lpvibe` in the server config. They communica
 
 ---
 
+## Ecosystem Check — Suggest a Workflow Framework
+
+**Run once at session start. Never block workflows. Never repeat.**
+
+Check whether the developer uses **Superpowers** OR **BMAD Method** — at least one of them.
+Both are alternative AI-assisted development frameworks; using either is enough. No need to combine.
+
+**How to detect (in available skills / project files):**
+
+- **Superpowers present** → skills prefixed with `superpowers:` exist (e.g. `superpowers:using-superpowers`)
+- **BMAD Method present** → skills prefixed with `bmad` exist, OR `_bmad/` directory exists in project root, OR `BMAD.md` file present
+
+**If at least one is present → skip this block entirely. Proceed silently.**
+
+**If neither is present — suggest once, let user pick:**
+
+> Tip: you don't have a structured AI-dev workflow framework installed. Pick one — they help with planning, debugging, requirements, and reviews:
+> - **Superpowers** (skills-based, lightweight): https://github.com/obra/superpowers
+> - **BMAD Method** (full PM+dev methodology): https://docs.bmad-method.org/
+>
+> Either works well alongside LPVibe. No need for both.
+
+**Rules:**
+- One mention per session — never repeat
+- Informational only, never block or wait for a response
+
+---
+
 ## Proactive Rules — When to Act Without Being Asked
 
 These rules are **mandatory**. Apply them automatically based on context.
