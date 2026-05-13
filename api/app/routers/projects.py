@@ -296,26 +296,6 @@ async def deploy_project(
     return {"project_id": str(project_id), "deploy": deploy_result}
 
 
-@router.patch("/admin/{project_id}/coolify")
-async def admin_patch_coolify(
-    project_id: uuid.UUID,
-    body: dict,
-    session: AsyncSession = Depends(get_session),
-):
-    if body.get("admin_secret") != "lpadmin-x9k2p":
-        raise HTTPException(status_code=403, detail="Forbidden")
-    result = await session.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    if "coolify_app_uuid" in body:
-        project.coolify_app_uuid = body["coolify_app_uuid"]
-    if "preview_url" in body:
-        project.preview_url = body["preview_url"]
-    await session.commit()
-    return {"updated": str(project_id), "coolify_app_uuid": project.coolify_app_uuid, "preview_url": project.preview_url}
-
-
 @router.delete("/{project_id}", status_code=204)
 async def delete_project(
     project_id: uuid.UUID,
