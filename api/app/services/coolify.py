@@ -11,10 +11,12 @@ class CoolifyService:
         server_uuid: str,
         project_uuid: str,
         environment_name: str,
+        deploy_key_uuid: str = "",
     ):
         self.server_uuid = server_uuid
         self.project_uuid = project_uuid
         self.environment_name = environment_name
+        self.deploy_key_uuid = deploy_key_uuid
         self._client = httpx.AsyncClient(
             base_url=api_url,
             headers={
@@ -25,18 +27,29 @@ class CoolifyService:
         )
 
     async def create_app(self, name: str, repo_url: str, env_vars: dict[str, str]) -> dict:
+        if self.deploy_key_uuid and repo_url.startswith("https://github.com/"):
+            path = repo_url.removeprefix("https://github.com/")
+            git_url = f"git@github.com:{path}"
+            endpoint = "/api/v1/applications/private-github-app"
+            extra = {"private_key_uuid": self.deploy_key_uuid}
+        else:
+            git_url = repo_url
+            endpoint = "/api/v1/applications/public"
+            extra = {}
+
         resp = await self._client.post(
-            "/api/v1/applications/public",
+            endpoint,
             json={
                 "name": name,
                 "server_uuid": self.server_uuid,
                 "project_uuid": self.project_uuid,
                 "environment_name": self.environment_name,
-                "git_repository": repo_url,
+                "git_repository": git_url,
                 "git_branch": "main",
                 "build_pack": "dockerfile",
                 "ports_exposes": "8000",
                 "instant_deploy": False,
+                **extra,
             },
         )
         resp.raise_for_status()

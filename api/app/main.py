@@ -39,6 +39,7 @@ async def lifespan(app: FastAPI):
             server_uuid=settings.coolify_server_uuid,
             project_uuid=settings.coolify_project_uuid,
             environment_name=settings.coolify_environment_name,
+            deploy_key_uuid=settings.coolify_deploy_key_uuid,
         )
 
     yield

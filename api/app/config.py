@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     coolify_server_uuid: str = "qwswwc4cgkswg4g00w0wsosw"
     coolify_project_uuid: str = "g8ocgc44wg0okscok0ocgwws"
     coolify_environment_name: str = "production"
+    coolify_deploy_key_uuid: str = ""
 
     # JWT
     jwt_signing_key: str = "changeme-in-production"
