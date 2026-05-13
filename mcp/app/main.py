@@ -82,6 +82,16 @@ async def get_deploy_status(project_id: str) -> dict:
 
 
 @mcp.tool()
+async def deploy_project(project_id: str) -> dict:
+    """Manually trigger a Coolify deployment for a project.
+
+    Use after config changes, or when auto-deploy on push didn't fire.
+    project_id: UUID of the project.
+    """
+    return await _client.deploy_project(project_id)
+
+
+@mcp.tool()
 async def run_command(project_id: str, command: str) -> dict:
     """Execute a shell command inside the running project container.
 

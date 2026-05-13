@@ -1,5 +1,6 @@
 import uuid
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -101,6 +102,12 @@ async def create_project(
             project.coolify_app_uuid = app_data.get("uuid")
             project.preview_url = app_data.get("fqdn")
 
+            if project.coolify_app_uuid:
+                try:
+                    await coolify_svc.deploy_app(project.coolify_app_uuid)
+                except Exception:
+                    pass  # deploy failure is non-fatal; project is still created
+
         project.state = "created"
         session.add(project)
         await log_action(session, user_id=user.id, action="create_project", project_id=project.id,
@@ -182,7 +189,15 @@ async def get_project_logs(
     if not coolify_svc:
         raise HTTPException(status_code=503, detail="Coolify service unavailable")
 
-    logs = await coolify_svc.get_app_logs(project.coolify_app_uuid, lines=lines)
+    try:
+        logs = await coolify_svc.get_app_logs(project.coolify_app_uuid, lines=lines)
+    except httpx.HTTPStatusError as e:
+        status = e.response.status_code
+        if status == 404:
+            raise HTTPException(status_code=409, detail="App not deployed yet or not found in Coolify")
+        raise HTTPException(status_code=502, detail=f"Coolify error {status}")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Coolify unreachable: {e}")
     return {"project_id": str(project_id), "logs": logs}
 
 
@@ -238,11 +253,47 @@ async def exec_command(
     if not coolify_svc:
         raise HTTPException(status_code=503, detail="Coolify service unavailable")
 
-    output = await coolify_svc.exec_command(project.coolify_app_uuid, command)
+    try:
+        output = await coolify_svc.exec_command(project.coolify_app_uuid, command)
+    except httpx.HTTPStatusError as e:
+        status = e.response.status_code
+        if status == 404:
+            raise HTTPException(status_code=409, detail="App not running — deploy it first")
+        raise HTTPException(status_code=502, detail=f"Coolify error {status}")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Coolify unreachable: {e}")
     await log_action(session, user_id=auth_user.user_id, action="exec_command",
                      project_id=project.id, args={"command": command}, result="success")
     await session.commit()
     return {"project_id": str(project_id), "command": command, "output": output}
+
+
+@router.post("/{project_id}/deploy")
+async def deploy_project(
+    project_id: uuid.UUID,
+    auth_user: AuthUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    result = await session.execute(
+        select(Project).where(Project.id == project_id, Project.user_id == auth_user.user_id)
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if not project.coolify_app_uuid:
+        raise HTTPException(status_code=409, detail="Project has no Coolify app")
+
+    from app.main import coolify_svc
+    if not coolify_svc:
+        raise HTTPException(status_code=503, detail="Coolify service unavailable")
+
+    try:
+        deploy_result = await coolify_svc.deploy_app(project.coolify_app_uuid)
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=502, detail=f"Coolify error {e.response.status_code}")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Coolify unreachable: {e}")
+    return {"project_id": str(project_id), "deploy": deploy_result}
 
 
 @router.delete("/{project_id}", status_code=204)

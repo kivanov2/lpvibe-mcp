@@ -68,6 +68,14 @@ class PlatformClient:
         r.raise_for_status()
         return r.json()
 
+    async def deploy_project(self, project_id: str) -> dict:
+        r = await self._client.post(
+            f"/projects/{project_id}/deploy",
+            headers=self._headers(),
+        )
+        r.raise_for_status()
+        return r.json()
+
     async def exec_command(self, project_id: str, command: str) -> dict:
         r = await self._client.post(
             f"/projects/{project_id}/exec",
