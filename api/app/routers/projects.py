@@ -79,6 +79,10 @@ async def create_project(
             provisioned["minio"] = bucket
 
         if coolify_svc and project.github_repo_url:
+            coolify_project_uuid = await coolify_svc.create_coolify_project(body.name)
+            project.coolify_project_uuid = coolify_project_uuid
+            provisioned["coolify_project"] = coolify_project_uuid
+
             pg_host = settings.database_url.split("@")[1].split(":")[0]
             env_vars = {
                 "DATABASE_URL": (
@@ -98,6 +102,7 @@ async def create_project(
                 name=body.name,
                 repo_url=project.github_repo_url + ".git",
                 env_vars=env_vars,
+                project_uuid=coolify_project_uuid,
             )
             project.coolify_app_uuid = app_data.get("uuid")
             project.preview_url = app_data.get("fqdn")
@@ -123,6 +128,11 @@ async def create_project(
 
 
 async def _rollback_provisioned(provisioned, github_svc, pg_admin_svc, minio_admin_svc, coolify_svc):
+    if "coolify_project" in provisioned and coolify_svc:
+        try:
+            await coolify_svc.delete_coolify_project(provisioned["coolify_project"])
+        except Exception:
+            pass
     if "github" in provisioned and github_svc:
         try:
             await github_svc.delete_repo(provisioned["github"])
@@ -314,6 +324,11 @@ async def delete_project(
     if project.coolify_app_uuid and coolify_svc:
         try:
             await coolify_svc.delete_app(project.coolify_app_uuid)
+        except Exception:
+            pass
+    if project.coolify_project_uuid and coolify_svc:
+        try:
+            await coolify_svc.delete_coolify_project(project.coolify_project_uuid)
         except Exception:
             pass
 

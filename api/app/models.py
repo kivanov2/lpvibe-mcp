@@ -32,6 +32,7 @@ class Project(Base):
     postgres_user: Mapped[str | None] = mapped_column(String(100))
     minio_bucket_name: Mapped[str | None] = mapped_column(String(100))
     coolify_app_uuid: Mapped[str | None] = mapped_column(String(100))
+    coolify_project_uuid: Mapped[str | None] = mapped_column(String(100))
     preview_url: Mapped[str | None] = mapped_column(String(500))
     state: Mapped[str] = mapped_column(String(50), default="created")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

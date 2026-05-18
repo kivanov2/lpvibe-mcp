@@ -26,7 +26,17 @@ class CoolifyService:
             timeout=60.0,
         )
 
-    async def create_app(self, name: str, repo_url: str, env_vars: dict[str, str]) -> dict:
+    async def create_coolify_project(self, name: str) -> str:
+        resp = await self._client.post("/api/v1/projects", json={"name": name})
+        resp.raise_for_status()
+        data = resp.json()
+        return data["uuid"]
+
+    async def delete_coolify_project(self, project_uuid: str) -> None:
+        resp = await self._client.delete(f"/api/v1/projects/{project_uuid}")
+        resp.raise_for_status()
+
+    async def create_app(self, name: str, repo_url: str, env_vars: dict[str, str], project_uuid: str | None = None) -> dict:
         if self.deploy_key_uuid and repo_url.startswith("https://github.com/"):
             path = repo_url.removeprefix("https://github.com/")
             git_url = f"git@github.com:{path}"
@@ -42,7 +52,7 @@ class CoolifyService:
             json={
                 "name": name,
                 "server_uuid": self.server_uuid,
-                "project_uuid": self.project_uuid,
+                "project_uuid": project_uuid or self.project_uuid,
                 "environment_name": self.environment_name,
                 "git_repository": git_url,
                 "git_branch": "main",
