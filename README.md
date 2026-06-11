@@ -46,6 +46,10 @@ claude mcp add lpvibe --transport http https://mcp.main.loyaltyapp-tools.com/mcp
 
 Токен — у владельца платформы (env `MCP_CLIENT_TOKEN` MCP-сервера в Coolify).
 
+Полная инструкция подключения и скилл `lpvibe` для Claude Code живут в
+[ai-toolkit](https://git.loyaltyplant.com/vibecoding/ai-toolkit):
+`skills/lpvibe/` + `skills/lpvibe/references/mcp-setup.md`.
+
 ## Инструменты MCP
 
 | Инструмент | Что делает |
