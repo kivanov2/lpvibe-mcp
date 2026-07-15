@@ -20,6 +20,18 @@ def _issue_service_jwt() -> str:
     return jwt.encode(payload, settings.jwt_signing_key, algorithm="HS256")
 
 
+def _raise_with_detail(r: httpx.Response) -> None:
+    """raise_for_status, но с detail из тела ответа — иначе причина 4xx/5xx теряется."""
+    if r.is_error:
+        try:
+            detail = r.json().get("detail", r.text[:300])
+        except Exception:
+            detail = r.text[:300]
+        raise httpx.HTTPStatusError(
+            f"Platform API {r.status_code}: {detail}", request=r.request, response=r
+        )
+
+
 class PlatformClient:
     def __init__(self) -> None:
         self._client = httpx.AsyncClient(base_url=settings.platform_api_url, timeout=120.0)
@@ -32,7 +44,7 @@ class PlatformClient:
 
     async def health(self) -> dict:
         r = await self._client.get("/health")
-        r.raise_for_status()
+        _raise_with_detail(r)
         return r.json()
 
     async def create_project(self, name: str, template: str) -> dict:
@@ -41,31 +53,31 @@ class PlatformClient:
             json={"name": name, "template": template},
             headers=self._headers(),
         )
-        r.raise_for_status()
+        _raise_with_detail(r)
         return r.json()
 
     async def list_projects(self) -> dict:
         r = await self._client.get("/projects", headers=self._headers())
-        r.raise_for_status()
+        _raise_with_detail(r)
         return r.json()
 
     async def get_project(self, project_id: str) -> dict:
         r = await self._client.get(f"/projects/{project_id}", headers=self._headers())
-        r.raise_for_status()
+        _raise_with_detail(r)
         return r.json()
 
     async def delete_project(self, project_id: str) -> None:
         r = await self._client.delete(f"/projects/{project_id}", headers=self._headers())
-        r.raise_for_status()
+        _raise_with_detail(r)
 
     async def get_project_logs(self, project_id: str, lines: int = 100) -> dict:
         r = await self._client.get(f"/projects/{project_id}/logs", params={"lines": lines}, headers=self._headers())
-        r.raise_for_status()
+        _raise_with_detail(r)
         return r.json()
 
     async def get_project_status(self, project_id: str) -> dict:
         r = await self._client.get(f"/projects/{project_id}/status", headers=self._headers())
-        r.raise_for_status()
+        _raise_with_detail(r)
         return r.json()
 
     async def deploy_project(self, project_id: str) -> dict:
@@ -73,7 +85,7 @@ class PlatformClient:
             f"/projects/{project_id}/deploy",
             headers=self._headers(),
         )
-        r.raise_for_status()
+        _raise_with_detail(r)
         return r.json()
 
     async def exec_command(self, project_id: str, command: str) -> dict:
@@ -83,7 +95,7 @@ class PlatformClient:
             headers=self._headers(),
             timeout=120.0,
         )
-        r.raise_for_status()
+        _raise_with_detail(r)
         return r.json()
 
     async def close(self) -> None:

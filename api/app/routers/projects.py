@@ -1,3 +1,4 @@
+import logging
 import uuid
 
 import httpx
@@ -11,6 +12,8 @@ from app.db import get_session
 from app.models import Project, User
 from app.schemas import ProjectCreate, ProjectList, ProjectResponse
 from app.services.audit import log_action
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -122,6 +125,7 @@ async def create_project(
         return project
 
     except Exception as e:
+        logger.exception("Project creation failed for %r (provisioned so far: %s)", body.name, list(provisioned))
         await session.rollback()
         await _rollback_provisioned(provisioned, github_svc, pg_admin_svc, minio_admin_svc, coolify_svc)
         raise HTTPException(status_code=500, detail=f"Project creation failed: {e}")
