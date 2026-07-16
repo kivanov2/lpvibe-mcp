@@ -60,14 +60,11 @@ class CoolifyService:
         resp.raise_for_status()
         return resp.json()["uuid"]
 
-    async def find_private_key_uuid(self, name: str) -> str | None:
+    async def find_private_key_uuids(self, name: str) -> list[str]:
         # ponytail: name-based lookup instead of storing uuid on Project; add a column if key count grows
         resp = await self._client.get("/api/v1/security/keys")
         resp.raise_for_status()
-        for key in resp.json():
-            if key.get("name") == name:
-                return key["uuid"]
-        return None
+        return [key["uuid"] for key in resp.json() if key.get("name") == name]
 
     async def delete_private_key(self, key_uuid: str) -> None:
         resp = await self._client.delete(f"/api/v1/security/keys/{key_uuid}")

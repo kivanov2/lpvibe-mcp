@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import uuid
 
@@ -140,6 +141,25 @@ async def create_project(
 
 def _deploy_key_name(project_name: str) -> str:
     return f"lpvibe-deploy-{project_name}"
+
+
+async def _delete_deploy_keys(coolify_svc, project_name: str) -> None:
+    """Delete every Coolify key named for this project, retrying while the
+    queued app deletion still holds a reference to the key."""
+    try:
+        key_uuids = await coolify_svc.find_private_key_uuids(_deploy_key_name(project_name))
+    except Exception:
+        logger.warning("deploy key lookup failed for %r", project_name, exc_info=True)
+        return
+    for key_uuid in key_uuids:
+        for delay in (0, 2, 5):
+            if delay:
+                await asyncio.sleep(delay)
+            try:
+                await coolify_svc.delete_private_key(key_uuid)
+                break
+            except Exception:
+                logger.warning("deploy key delete failed for %r (uuid %s)", project_name, key_uuid, exc_info=True)
 
 
 async def _rollback_provisioned(provisioned, github_svc, pg_admin_svc, minio_admin_svc, coolify_svc):
@@ -352,12 +372,7 @@ async def delete_project(
         except Exception:
             pass
     if coolify_svc:
-        try:
-            key_uuid = await coolify_svc.find_private_key_uuid(_deploy_key_name(project.name))
-            if key_uuid:
-                await coolify_svc.delete_private_key(key_uuid)
-        except Exception:
-            pass
+        await _delete_deploy_keys(coolify_svc, project.name)
 
     if project.github_repo_url and github_svc:
         repo_name = project.github_repo_url.rstrip("/").split("/")[-1]
