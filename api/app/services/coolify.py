@@ -46,9 +46,14 @@ class CoolifyService:
                 Encoding,
                 PublicFormat,
                 load_pem_private_key,
+                load_ssh_private_key,
             )
 
-            key = load_pem_private_key(resp.json()["private_key"].encode(), password=None)
+            raw = resp.json()["private_key"].encode()
+            try:
+                key = load_ssh_private_key(raw, password=None)
+            except ValueError:
+                key = load_pem_private_key(raw, password=None)
             self._deploy_public_key = (
                 key.public_key().public_bytes(Encoding.OpenSSH, PublicFormat.OpenSSH).decode()
             )
