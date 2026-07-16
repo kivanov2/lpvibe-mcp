@@ -121,12 +121,7 @@ async def create_project(
             )
             project.coolify_app_uuid = app_data.get("uuid")
             project.preview_url = app_data.get("fqdn")
-
-            if project.coolify_app_uuid:
-                try:
-                    await coolify_svc.deploy_app(project.coolify_app_uuid)
-                except Exception:
-                    pass  # deploy failure is non-fatal; project is still created
+            # no deploy here: the repo is empty until the user pushes code with a Dockerfile
 
         project.state = "created"
         session.add(project)

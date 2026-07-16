@@ -115,7 +115,8 @@ class CoolifyService:
         return app_data
 
     async def deploy_app(self, app_uuid: str) -> dict:
-        resp = await self._client.post("/api/v1/deploy", json={"tag_or_uuid": app_uuid, "force": True})
+        # /deploy takes query params (uuid or tag), not a JSON body
+        resp = await self._client.post("/api/v1/deploy", params={"uuid": app_uuid, "force": "true"})
         resp.raise_for_status()
         result = resp.json()
         if inspect.isawaitable(result):
