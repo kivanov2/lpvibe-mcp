@@ -31,7 +31,8 @@ class GitHubService:
             f"/repos/{self.org}/{repo}/keys",
             json={"title": title, "key": public_key, "read_only": read_only},
         )
-        resp.raise_for_status()
+        if resp.status_code >= 400:
+            raise RuntimeError(f"GitHub add_deploy_key failed {resp.status_code}: {resp.text}")
 
     async def delete_repo(self, name: str) -> None:
         resp = await self._client.delete(f"/repos/{self.org}/{name}")

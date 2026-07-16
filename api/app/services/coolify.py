@@ -3,6 +3,22 @@ import inspect
 import httpx
 
 
+def generate_ssh_keypair() -> tuple[str, str]:
+    """Return (private_key_openssh, public_key_openssh) for a fresh ed25519 key."""
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives.serialization import (
+        Encoding,
+        NoEncryption,
+        PrivateFormat,
+        PublicFormat,
+    )
+
+    key = Ed25519PrivateKey.generate()
+    priv = key.private_bytes(Encoding.PEM, PrivateFormat.OpenSSH, NoEncryption()).decode()
+    pub = key.public_key().public_bytes(Encoding.OpenSSH, PublicFormat.OpenSSH).decode()
+    return priv, pub
+
+
 class CoolifyService:
     def __init__(
         self,
@@ -17,7 +33,6 @@ class CoolifyService:
         self.project_uuid = project_uuid
         self.environment_name = environment_name
         self.deploy_key_uuid = deploy_key_uuid
-        self._deploy_public_key: str | None = None
         self._client = httpx.AsyncClient(
             base_url=api_url,
             headers={
@@ -37,34 +52,34 @@ class CoolifyService:
         resp = await self._client.delete(f"/api/v1/projects/{project_uuid}")
         resp.raise_for_status()
 
-    async def get_deploy_public_key(self) -> str:
-        """Derive the OpenSSH public key from the Coolify-stored deploy key (cached)."""
-        if self._deploy_public_key is None:
-            resp = await self._client.get(f"/api/v1/security/keys/{self.deploy_key_uuid}")
-            resp.raise_for_status()
-            from cryptography.hazmat.primitives.serialization import (
-                Encoding,
-                PublicFormat,
-                load_pem_private_key,
-                load_ssh_private_key,
-            )
+    async def create_private_key(self, name: str, private_key: str) -> str:
+        resp = await self._client.post(
+            "/api/v1/security/keys",
+            json={"name": name, "private_key": private_key},
+        )
+        resp.raise_for_status()
+        return resp.json()["uuid"]
 
-            raw = resp.json()["private_key"].encode()
-            try:
-                key = load_ssh_private_key(raw, password=None)
-            except ValueError:
-                key = load_pem_private_key(raw, password=None)
-            self._deploy_public_key = (
-                key.public_key().public_bytes(Encoding.OpenSSH, PublicFormat.OpenSSH).decode()
-            )
-        return self._deploy_public_key
+    async def find_private_key_uuid(self, name: str) -> str | None:
+        # ponytail: name-based lookup instead of storing uuid on Project; add a column if key count grows
+        resp = await self._client.get("/api/v1/security/keys")
+        resp.raise_for_status()
+        for key in resp.json():
+            if key.get("name") == name:
+                return key["uuid"]
+        return None
 
-    async def create_app(self, name: str, repo_url: str, env_vars: dict[str, str], project_uuid: str | None = None) -> dict:
-        if self.deploy_key_uuid and repo_url.startswith("https://github.com/"):
+    async def delete_private_key(self, key_uuid: str) -> None:
+        resp = await self._client.delete(f"/api/v1/security/keys/{key_uuid}")
+        resp.raise_for_status()
+
+    async def create_app(self, name: str, repo_url: str, env_vars: dict[str, str], project_uuid: str | None = None, private_key_uuid: str | None = None) -> dict:
+        key_uuid = private_key_uuid or self.deploy_key_uuid
+        if key_uuid and repo_url.startswith("https://github.com/"):
             path = repo_url.removeprefix("https://github.com/")
             git_url = f"git@github.com:{path}"
             endpoint = "/api/v1/applications/private-deploy-key"
-            extra = {"private_key_uuid": self.deploy_key_uuid}
+            extra = {"private_key_uuid": key_uuid}
         else:
             git_url = repo_url
             endpoint = "/api/v1/applications/public"

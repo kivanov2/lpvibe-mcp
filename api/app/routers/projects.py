@@ -12,6 +12,7 @@ from app.db import get_session
 from app.models import Project, User
 from app.schemas import ProjectCreate, ProjectList, ProjectResponse
 from app.services.audit import log_action
+from app.services.coolify import generate_ssh_keypair
 
 logger = logging.getLogger(__name__)
 
@@ -65,13 +66,20 @@ async def create_project(
     provisioned = {}
 
     try:
+        deploy_key_uuid = None
         if github_svc:
             repo = await github_svc.create_repo(body.name)
             project.github_repo_url = repo["html_url"]
             provisioned["github"] = body.name
-            if coolify_svc and coolify_svc.deploy_key_uuid:
-                # repos are private; Coolify clones over SSH, so each repo needs the deploy key
-                await github_svc.add_deploy_key(body.name, await coolify_svc.get_deploy_public_key())
+            if coolify_svc:
+                # repos are private and a GitHub deploy key fits only one repo,
+                # so each project gets its own keypair: private -> Coolify, public -> repo
+                private_key, public_key = generate_ssh_keypair()
+                deploy_key_uuid = await coolify_svc.create_private_key(
+                    _deploy_key_name(body.name), private_key
+                )
+                provisioned["coolify_key"] = deploy_key_uuid
+                await github_svc.add_deploy_key(body.name, public_key)
 
         if pg_admin_svc:
             db_info = await pg_admin_svc.create_project_db(body.name)
@@ -109,6 +117,7 @@ async def create_project(
                 repo_url=project.github_repo_url + ".git",
                 env_vars=env_vars,
                 project_uuid=coolify_project_uuid,
+                private_key_uuid=deploy_key_uuid,
             )
             project.coolify_app_uuid = app_data.get("uuid")
             project.preview_url = app_data.get("fqdn")
@@ -134,7 +143,16 @@ async def create_project(
         raise HTTPException(status_code=500, detail=f"Project creation failed: {e}")
 
 
+def _deploy_key_name(project_name: str) -> str:
+    return f"lpvibe-deploy-{project_name}"
+
+
 async def _rollback_provisioned(provisioned, github_svc, pg_admin_svc, minio_admin_svc, coolify_svc):
+    if "coolify_key" in provisioned and coolify_svc:
+        try:
+            await coolify_svc.delete_private_key(provisioned["coolify_key"])
+        except Exception:
+            pass
     if "coolify_project" in provisioned and coolify_svc:
         try:
             await coolify_svc.delete_coolify_project(provisioned["coolify_project"])
@@ -336,6 +354,13 @@ async def delete_project(
     if project.coolify_project_uuid and coolify_svc:
         try:
             await coolify_svc.delete_coolify_project(project.coolify_project_uuid)
+        except Exception:
+            pass
+    if coolify_svc:
+        try:
+            key_uuid = await coolify_svc.find_private_key_uuid(_deploy_key_name(project.name))
+            if key_uuid:
+                await coolify_svc.delete_private_key(key_uuid)
         except Exception:
             pass
 
