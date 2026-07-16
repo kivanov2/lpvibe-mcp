@@ -120,7 +120,7 @@ async def create_project(
                 private_key_uuid=deploy_key_uuid,
             )
             project.coolify_app_uuid = app_data.get("uuid")
-            project.preview_url = app_data.get("fqdn")
+            project.preview_url = app_data.get("fqdn") or app_data.get("domains")
             # no deploy here: the repo is empty until the user pushes code with a Dockerfile
 
         project.state = "created"
