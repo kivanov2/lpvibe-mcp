@@ -69,6 +69,9 @@ async def create_project(
             repo = await github_svc.create_repo(body.name)
             project.github_repo_url = repo["html_url"]
             provisioned["github"] = body.name
+            if coolify_svc and coolify_svc.deploy_key_uuid:
+                # repos are private; Coolify clones over SSH, so each repo needs the deploy key
+                await github_svc.add_deploy_key(body.name, await coolify_svc.get_deploy_public_key())
 
         if pg_admin_svc:
             db_info = await pg_admin_svc.create_project_db(body.name)

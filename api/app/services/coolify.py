@@ -17,6 +17,7 @@ class CoolifyService:
         self.project_uuid = project_uuid
         self.environment_name = environment_name
         self.deploy_key_uuid = deploy_key_uuid
+        self._deploy_public_key: str | None = None
         self._client = httpx.AsyncClient(
             base_url=api_url,
             headers={
@@ -35,6 +36,23 @@ class CoolifyService:
     async def delete_coolify_project(self, project_uuid: str) -> None:
         resp = await self._client.delete(f"/api/v1/projects/{project_uuid}")
         resp.raise_for_status()
+
+    async def get_deploy_public_key(self) -> str:
+        """Derive the OpenSSH public key from the Coolify-stored deploy key (cached)."""
+        if self._deploy_public_key is None:
+            resp = await self._client.get(f"/api/v1/security/keys/{self.deploy_key_uuid}")
+            resp.raise_for_status()
+            from cryptography.hazmat.primitives.serialization import (
+                Encoding,
+                PublicFormat,
+                load_pem_private_key,
+            )
+
+            key = load_pem_private_key(resp.json()["private_key"].encode(), password=None)
+            self._deploy_public_key = (
+                key.public_key().public_bytes(Encoding.OpenSSH, PublicFormat.OpenSSH).decode()
+            )
+        return self._deploy_public_key
 
     async def create_app(self, name: str, repo_url: str, env_vars: dict[str, str], project_uuid: str | None = None) -> dict:
         if self.deploy_key_uuid and repo_url.startswith("https://github.com/"):

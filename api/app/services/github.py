@@ -26,6 +26,13 @@ class GitHubService:
             result = await result
         return {"html_url": result["html_url"], "clone_url": result["clone_url"]}
 
+    async def add_deploy_key(self, repo: str, public_key: str, title: str = "lpvibe-deploy-key", read_only: bool = True) -> None:
+        resp = await self._client.post(
+            f"/repos/{self.org}/{repo}/keys",
+            json={"title": title, "key": public_key, "read_only": read_only},
+        )
+        resp.raise_for_status()
+
     async def delete_repo(self, name: str) -> None:
         resp = await self._client.delete(f"/repos/{self.org}/{name}")
         resp.raise_for_status()
