@@ -40,7 +40,7 @@ class CoolifyService:
         if self.deploy_key_uuid and repo_url.startswith("https://github.com/"):
             path = repo_url.removeprefix("https://github.com/")
             git_url = f"git@github.com:{path}"
-            endpoint = "/api/v1/applications/private-github-app"
+            endpoint = "/api/v1/applications/private-deploy-key"
             extra = {"private_key_uuid": self.deploy_key_uuid}
         else:
             git_url = repo_url
