@@ -26,16 +26,20 @@ flowchart TD
     API --> MinIO[("MinIO<br/>bucket на проект")]
     API -->|создание репо| GH["GitHub org<br/>LoyaltyPlant-Vibe"]
     API -->|создание app + деплой| Coolify["Coolify"]
-    GH -->|push → auto-deploy| Coolify
+    GH -->|clone по deploy key| Coolify
     Coolify -->|"preview URL<br/>*.main.loyaltyapp-tools.com"| App["Приложение проекта"]
 ```
 
 При создании проекта Platform API провижинит **атомарно, с откатом при ошибке**:
 
-1. GitHub-репозиторий из шаблона (org `LoyaltyPlant-Vibe`)
+1. GitHub-репозиторий (приватный, org `LoyaltyPlant-Vibe`) + персональный deploy key
+   (ed25519-пара на проект: приватный ключ → Coolify, публичный read-only → репо)
 2. Postgres-базу и роль с паролем
 3. MinIO-bucket с отдельным ключом доступа
-4. Coolify-проект и приложение с привязкой к репо (auto-deploy на push)
+4. Coolify-проект и приложение с привязкой к репо по SSH
+
+Репозиторий создаётся пустым: после первого пуша кода с Dockerfile деплой
+запускается вручную через `deploy_project` (вебхука GitHub → Coolify нет).
 
 ## Подключение MCP к Claude Code
 
@@ -72,7 +76,7 @@ claude mcp add lpvibe --transport http https://mcp.main.loyaltyapp-tools.com/mcp
 ```mermaid
 flowchart LR
     A[create_project] --> B[git push кода в репо]
-    B --> C[auto-deploy в Coolify]
+    B --> C[deploy_project]
     C --> D[get_deploy_status]
     D --> E[run_command: миграции]
     E --> F[browser_screenshot:<br/>визуальная проверка]
