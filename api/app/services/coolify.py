@@ -6,7 +6,7 @@ import uuid as uuid_lib
 import httpx
 
 
-NEVER_CRON = "0 0 31 2 *"
+NEVER_CRON = "@yearly"
 
 
 class ExecCommandError(RuntimeError):
