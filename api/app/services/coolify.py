@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import inspect
 import time
 import uuid as uuid_lib
@@ -7,6 +8,11 @@ import httpx
 
 
 NEVER_CRON = "@yearly"
+
+# Coolify keeps a scheduled task's command in a varchar(255); anything longer
+# is written into the container in base64 chunks and run from there.
+MAX_COMMAND = 255
+CHUNK = 180
 
 
 class ExecCommandError(RuntimeError):
@@ -156,6 +162,27 @@ class CoolifyService:
         Coolify has no API for arbitrary container commands, so the task is
         created, executed, polled for output and deleted again.
         """
+        if len(command) <= MAX_COMMAND:
+            return await self._run_task(app_uuid, command, timeout)
+        return await self._run_long_command(app_uuid, command, timeout)
+
+    async def _run_long_command(self, app_uuid: str, command: str, timeout: int) -> str:
+        encoded = base64.b64encode(command.encode()).decode()
+        path = f"/tmp/lpvibe-{uuid_lib.uuid4().hex[:8]}.b64"
+        try:
+            for index in range(0, len(encoded), CHUNK):
+                redirect = ">" if index == 0 else ">>"
+                await self._run_task(
+                    app_uuid, f"printf %s {encoded[index:index + CHUNK]} {redirect} {path}", timeout
+                )
+            return await self._run_task(app_uuid, f"base64 -d {path} | sh", timeout)
+        finally:
+            try:
+                await self._run_task(app_uuid, f"rm -f {path}", timeout)
+            except Exception:
+                pass
+
+    async def _run_task(self, app_uuid: str, command: str, timeout: int) -> str:
         resp = await self._client.post(
             f"/api/v1/applications/{app_uuid}/scheduled-tasks",
             json={

@@ -1,3 +1,4 @@
+import base64
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -140,3 +141,58 @@ async def test_exec_command_times_out_and_cleans_up(coolify):
             await coolify.exec_command("app-456", "sleep 999", timeout=0)
 
     delete.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_exec_command_chunks_long_command(coolify):
+    commands = []
+
+    async def post(url, **kwargs):
+        payload = kwargs.get("json")
+        if payload:
+            commands.append(payload["command"])
+        return _resp({"uuid": "task-1"})
+
+    async def get(url, **kwargs):
+        return _resp([{"status": "success", "message": "done", "started_at": "2026-01-01T00:00:00Z"}])
+
+    long_command = "echo " + "x" * 400
+
+    with patch.object(coolify._client, "post", side_effect=post), \
+         patch.object(coolify._client, "get", side_effect=get), \
+         patch.object(coolify._client, "delete", AsyncMock(return_value=_resp())):
+        assert await coolify.exec_command("app-456", long_command) == "done"
+
+    assert all(len(c) <= 255 for c in commands)
+    written = [c for c in commands if c.startswith("printf %s ")]
+    assert len(written) > 1
+    assert written[0].split()[-2] == ">"
+    assert all(c.split()[-2] == ">>" for c in written[1:])
+
+    path = written[0].split()[-1]
+    encoded = "".join(c.split()[2] for c in written)
+    assert base64.b64decode(encoded).decode() == long_command
+    assert f"base64 -d {path} | sh" in commands
+    assert f"rm -f {path}" in commands
+
+
+@pytest.mark.asyncio
+async def test_exec_command_cleans_up_after_long_command_fails(coolify):
+    commands = []
+
+    async def post(url, **kwargs):
+        payload = kwargs.get("json")
+        if payload:
+            commands.append(payload["command"])
+        return _resp({"uuid": "task-1"})
+
+    async def get(url, **kwargs):
+        return _resp([{"status": "failed", "message": "boom", "started_at": "2026-01-01T00:00:00Z"}])
+
+    with patch.object(coolify._client, "post", side_effect=post), \
+         patch.object(coolify._client, "get", side_effect=get), \
+         patch.object(coolify._client, "delete", AsyncMock(return_value=_resp())):
+        with pytest.raises(ExecCommandError, match="boom"):
+            await coolify.exec_command("app-456", "echo " + "x" * 400)
+
+    assert any(c.startswith("rm -f /tmp/lpvibe-") for c in commands)
