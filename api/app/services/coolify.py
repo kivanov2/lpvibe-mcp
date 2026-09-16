@@ -1,6 +1,16 @@
+import asyncio
 import inspect
+import time
+import uuid as uuid_lib
 
 import httpx
+
+
+NEVER_CRON = "0 0 31 2 *"
+
+
+class ExecCommandError(RuntimeError):
+    """Command ran inside the container and failed, or never finished."""
 
 
 def generate_ssh_keypair() -> tuple[str, str]:
@@ -133,14 +143,62 @@ class CoolifyService:
         resp.raise_for_status()
         return resp.text
 
-    async def exec_command(self, app_uuid: str, command: str) -> dict:
+    @staticmethod
+    async def _json(resp):
+        data = resp.json()
+        if inspect.isawaitable(data):
+            data = await data
+        return data
+
+    async def exec_command(self, app_uuid: str, command: str, timeout: int = 120) -> str:
+        """Run a command inside the app container via a throwaway scheduled task.
+
+        Coolify has no API for arbitrary container commands, so the task is
+        created, executed, polled for output and deleted again.
+        """
         resp = await self._client.post(
-            f"/api/v1/applications/{app_uuid}/execute",
-            json={"command": command},
-            timeout=120.0,
+            f"/api/v1/applications/{app_uuid}/scheduled-tasks",
+            json={
+                "name": f"lpvibe-exec-{uuid_lib.uuid4().hex[:8]}",
+                "command": command,
+                "frequency": NEVER_CRON,
+                "timeout": timeout,
+                "enabled": False,
+            },
         )
         resp.raise_for_status()
-        return resp.json()
+        task_uuid = (await self._json(resp))["uuid"]
+        base = f"/api/v1/applications/{app_uuid}/scheduled-tasks/{task_uuid}"
+
+        try:
+            resp = await self._client.post(f"{base}/execute")
+            resp.raise_for_status()
+            return await self._await_execution(base, timeout)
+        finally:
+            try:
+                await self._client.delete(base)
+            except Exception:
+                pass
+
+    async def _await_execution(self, base: str, timeout: int) -> str:
+        deadline = time.monotonic() + timeout
+        while True:
+            resp = await self._client.get(f"{base}/executions")
+            resp.raise_for_status()
+            executions = await self._json(resp) or []
+            if executions:
+                last = max(
+                    executions,
+                    key=lambda e: e.get("started_at") or e.get("created_at") or "",
+                )
+                status = last.get("status")
+                if status == "success":
+                    return last.get("message") or ""
+                if status == "failed":
+                    raise ExecCommandError(last.get("message") or "command failed")
+            if time.monotonic() >= deadline:
+                raise ExecCommandError(f"command did not finish in {timeout}s")
+            await asyncio.sleep(1.0)
 
     async def delete_app(self, app_uuid: str) -> None:
         resp = await self._client.delete(

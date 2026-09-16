@@ -13,7 +13,7 @@ from app.db import get_session
 from app.models import Project, User
 from app.schemas import ProjectCreate, ProjectList, ProjectResponse
 from app.services.audit import log_action
-from app.services.coolify import generate_ssh_keypair
+from app.services.coolify import ExecCommandError, generate_ssh_keypair
 
 logger = logging.getLogger(__name__)
 
@@ -305,10 +305,12 @@ async def exec_command(
 
     try:
         output = await coolify_svc.exec_command(project.coolify_app_uuid, command)
+    except ExecCommandError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except httpx.HTTPStatusError as e:
         status = e.response.status_code
         if status == 404:
-            raise HTTPException(status_code=409, detail="App not running — deploy it first")
+            raise HTTPException(status_code=409, detail="Coolify app not found — deploy it first")
         raise HTTPException(status_code=502, detail=f"Coolify error {status}")
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Coolify unreachable: {e}")
