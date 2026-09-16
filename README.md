@@ -105,9 +105,23 @@ REST под `/projects`, аутентификация — JWT (`Authorization: B
 | GET | `/projects/{id}` | метаданные проекта |
 | GET | `/projects/{id}/logs` | логи контейнера |
 | GET | `/projects/{id}/status` | статус + preview URL |
-| POST | `/projects/{id}/exec` | команда в контейнере |
+| POST | `/projects/{id}/exec` | команда в контейнере (см. ниже) |
 | POST | `/projects/{id}/deploy` | запустить деплой |
 | DELETE | `/projects/{id}` | удалить проект + ресурсы |
+
+### Как работает `/exec`
+
+У Coolify нет API для произвольной команды в контейнере, поэтому Platform API
+создаёт одноразовую scheduled task, запускает её, читает вывод из executions и
+удаляет задачу. Отсюда два следствия:
+
+- Команда выполняется как `docker exec <контейнер> sh -c '<команда>'`. Если у
+  приложения запущено больше одного контейнера — например, в первые минуты после
+  деплоя, — Coolify откажется выбирать и задача упадёт.
+- Coolify хранит команду в `varchar(255)`. Команды длиннее пишутся в контейнер
+  base64-кусками во временный файл и выполняются оттуда.
+
+Упавшая команда возвращает 400 с её stderr, а не 5xx.
 
 Ключевые env (см. [api/app/config.py](api/app/config.py)):
 `DATABASE_URL`, `PG_ADMIN_DSN`, `REDIS_URL`, `MINIO_*`, `GH_ADMIN_TOKEN`, `GH_ORG`,
